@@ -1,0 +1,185 @@
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import { v2 as cloudinary } from "cloudinary";
+import sharp from "sharp";
+import { ICloudinaryUploadResponse, IUploadedFile } from "../interfaces/file";
+import config from "../config";
+
+// Memory storage
+const storage = multer.memoryStorage();
+
+// allowed file types
+const allowedTypes = [
+  // images
+  "image/jpeg",
+  "image/png",
+  "image/avif",
+  "image/webp",
+
+  // documents
+  "application/pdf",
+  "application/msword", // .doc
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+  "application/vnd.ms-excel", // .xls
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  "application/vnd.ms-powerpoint", // .ppt
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+
+  // archives
+  "application/zip",
+
+  // openDocument formats
+  "application/vnd.oasis.opendocument.presentation", // .odp
+  "application/vnd.oasis.opendocument.spreadsheet", // .ods
+  "application/vnd.oasis.opendocument.text", // .odt
+  "application/vnd.oasis.opendocument.chart",
+  "application/vnd.oasis.opendocument.graphics",
+  "application/vnd.oasis.opendocument.image",
+  "application/vnd.oasis.opendocument.text-master",
+
+  // text files
+  "text/plain",
+  "text/csv",
+  "text/html",
+  "text/markdown",
+  "text/xml",
+  "text/json",
+  "application/json",
+  "application/octet-stream",
+
+  // video types
+  "video/mp4", // MP4
+  "video/mpeg", // MPEG
+  "video/x-msvideo", // AVI
+  "video/x-ms-wmv", // WMV
+  "video/quicktime", // MOV
+  "video/x-flv", // FLV
+  "video/webm", // WEBM
+  "video/3gpp", // 3GP
+  "video/3gpp2", // 3G2
+  "video/ogg", // OGG
+  "video/x-matroska", // MKV
+];
+
+// file filter
+const fileFilter = (
+  req: Express.Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Unsupported file type"));
+  }
+};
+
+// multer middleware
+const upload = multer({ storage, fileFilter });
+
+const profileImage = upload.single("profileImage");
+const passportOrNID = upload.array("passportOrNID") // user create time
+
+const recordProofVideoStarting = upload.array("recordProofVideoStarting", 40);
+const recordProofVideoEnding = upload.array("recordProofVideoEnding", 40);
+const houseRules = upload.single("houseRules");
+const guardPhoto = upload.single("guardPhoto");
+
+// service
+const coverImage = upload.single("coverImage");
+
+// hotel booking
+const passportImages = upload.array("passportImages", 40);
+
+const uploadMessageImages = upload.array("messageImages", 40);
+
+const newsImage = upload.array("image", 40);
+
+const advertiseVideo = upload.single("advertiseVideo");
+
+const invertorRelationImage = upload.single("invertorRelationImage");
+
+// cloudinary configuration
+cloudinary.config({
+  cloud_name: config.cloudinary.cloud_name,
+  api_key: config.cloudinary.api_key,
+  api_secret: config.cloudinary.api_secret,
+});
+
+// cloudinary uploader function
+const uploadToCloudinary = async (
+  file: IUploadedFile
+): Promise<ICloudinaryUploadResponse | undefined> => {
+  let fileBuffer = file.buffer;
+  const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+
+  if (!fileBuffer) {
+    throw new Error("File buffer not found");
+  }
+
+  // Optimize image if it exceeds 10MB
+  if (file.mimetype.startsWith("image/") && file.size > MAX_SIZE) {
+    try {
+      fileBuffer = await sharp(fileBuffer)
+        .resize({ width: 2000, withoutEnlargement: true })
+        .toFormat("jpeg", { quality: 80 })
+        .toBuffer();
+    } catch (error) {
+      console.error("Image optimization error:", error);
+    }
+  }
+
+  return new Promise((resolve, reject) => {
+    // Determine resource type based on MIME type
+    let resourceType: "image" | "video" | "raw" = "raw";
+
+    if (file.mimetype.startsWith("image/")) {
+      resourceType = "image";
+    } else if (file.mimetype.startsWith("video/")) {
+      resourceType = "video";
+    } else {
+      resourceType = "raw";
+    }
+
+    const uploadStream = cloudinary.uploader.upload_stream(
+      { resource_type: resourceType },
+      (error, result) => {
+        if (error) {
+          reject(error);
+        } else {
+          resolve(result as ICloudinaryUploadResponse | undefined);
+        }
+      }
+    );
+
+    uploadStream.end(fileBuffer);
+  });
+};
+
+export const uploadFile = {
+  upload,
+  profileImage,
+  passportOrNID, // user create time
+
+  recordProofVideoStarting,
+  recordProofVideoEnding,
+  houseRules,
+  guardPhoto,
+
+  // service
+  coverImage,
+
+  // hotel booking
+  passportImages,
+
+  uploadMessageImages,
+
+  newsImage,
+
+  advertiseVideo,
+
+  invertorRelationImage,
+
+  uploadToCloudinary,
+};

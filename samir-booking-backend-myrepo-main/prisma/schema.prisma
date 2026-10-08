@@ -1,0 +1,724 @@
+// datasource and generator setup
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ---------------------------------------------------------
+//  ENUMS
+// ---------------------------------------------------------
+
+enum UserRole {
+  USER
+  PROPERTY_OWNER
+  SERVICE_PROVIDER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  REJECTED
+}
+
+enum EveryServiceStatus {
+  AVAILABLE
+  BOOKED
+  INACTIVE
+  WAITING_FOR_ACCEPT
+  ACCEPTED
+}
+
+enum PaymentStatus {
+  PAID
+  UNPAID
+  REFUNDED
+  SUCCESS
+  IN_HOLD
+  REJECTED
+}
+
+enum Weekday {
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+enum BookingStatus {
+  PENDING
+  PENDING_PAYMENT
+  NEED_ACCEPT
+  CONFIRMED
+  IN_WORKING
+  COMPLETED_BY_PROVIDER
+  REJECTED
+  COMPLETED
+  CANCELLED
+  EXPIRED
+}
+
+enum BookingSource {
+  APP
+  AIRBNB
+}
+
+enum PaymentProvider {
+  STRIPE
+}
+
+enum SupportType {
+  Critical
+  High
+  Medium
+  Low
+}
+
+enum SupportStatus {
+  Pending
+  Closed
+}
+
+enum Currency {
+  USD
+  BDT
+  EUR
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  CANCELED
+}
+
+enum GuardStatus {
+  AVAILABLE
+  ON_DUTY
+  OFF_DUTY
+}
+
+enum ServiceStatus {
+  ACTIVE
+  INACTIVE
+  PENDING
+}
+
+// ---------------------------------------------------------
+//  MODEL
+// ---------------------------------------------------------
+
+model User {
+  id              String     @id @default(auto()) @map("_id") @db.ObjectId
+  fullName        String?
+  email           String     @unique
+  password        String
+  profileImage    String     @default("https://i.ibb.co/Ps9gZ8DD/Profile-image.png")
+  passportOrNID   String[] // upload passport or NID
+  contactNumber   String?
+  address         String?
+  country         String?
+  role            UserRole   @default(USER)
+  status          UserStatus @default(ACTIVE)
+  fcmToken        String?    @default("")
+  dateOfBirth     DateTime?
+  isEmailVerified Boolean    @default(false)
+  isPhoneVerified Boolean    @default(false)
+
+  userRating      String?
+  userReviewCount Int        @default(0)
+
+  // Stripe
+  stripeAccountId   String?
+  isStripeConnected Boolean @default(false)
+  stripeCustomerId  String?
+
+  // Airbnb OAuth
+  airbnbAccessToken  String?
+  airbnbRefreshToken String?
+
+  // notification Preferences
+  supportNotification Boolean @default(true)
+  paymentNotification Boolean @default(true)
+  emailNotification   Boolean @default(true)
+
+  isHotel      Boolean @default(false)
+  isSubscribed Boolean @default(false)
+  isService    Boolean @default(false)
+
+  otp        String?
+  otpExpiry  DateTime?
+  identifier String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // relationships
+  payment              Payment[]
+  notifications        Notifications[]
+  hotel                Hotel[]
+  review               Review[]   @relation("ReviewsGiven")
+  reviewsReceived      Review[]   @relation("ReviewsReceived")
+  hotel_bookings       Hotel_Booking[]
+  myFavorites          Favorite[]             @relation("MyFavorites")
+  favoritesMe          Favorite[]             @relation("FavoritesMe")
+  sender               Channel[]              @relation("ChannelPerson1")
+  receiver             Channel[]              @relation("ChannelPerson2")
+  messages             Message[]              @relation("sentMessages")
+  support              Support[]
+  subscriptions        SubscriptionPlan[]
+  purchaseSubscription Purchase_subscription?
+  services             Service[]
+  serviceBookings      Service_booking[]
+
+  @@map("users")
+}
+
+model Admin {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  fullName    String?
+  phoneNumber String?
+  email       String  @unique
+  password    String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("admins")
+}
+
+model Hotel {
+  id                   String             @id @default(auto()) @map("_id") @db.ObjectId
+  // propertyName         String
+  uploadPhotosOrVideos String[] // image
+  propertyTitle        String
+  propertyAddress      String
+  propertyDescription  String
+  latitude             Float?
+  longitude            Float?
+  // Capacity
+  maxGuests            Int
+  bedrooms             Int
+  bathrooms            Int
+  // Security Access
+  smartLockCode        String?
+  keyBoxPin            String?
+  wifiPassword         String?
+  // Amenities
+  amenities            String[]
+  // inventory
+  inventoryItems       InventoryItem[]
+  houseRules           String // image
+  addSecurityKeys      String?
+  addLocalTips         LocalTip[]
+  basePrice            Float
+  customPrices         CustomPrice[]
+  weeklyOffers         Float? // 10% off
+  monthlyOffers        Float? // 15% off
+  // availability
+  availableForBooking  EveryServiceStatus @default(AVAILABLE)
+  hotelRating          String?
+  hotelReviewCount     Int                @default(0)
+  isFavorite           Boolean            @default(false)
+  syncWithAirbnb       Boolean            @default(false)
+  airbnbIcalUrl        String? // Airbnb → Your App
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  // relationships
+  user           User?           @relation(fields: [partnerId], references: [id])
+  partnerId      String?         @db.ObjectId
+  hotel_bookings Hotel_Booking[]
+  favorite       Favorite[]
+  review         Review[]
+  guards         Guard?
+
+  @@map("hotels")
+}
+
+model CustomPrice {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  startDate DateTime
+  endDate   DateTime
+  price     Float // override price per night
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // relationships
+  hotel   Hotel  @relation(fields: [hotelId], references: [id])
+  hotelId String @db.ObjectId
+
+  @@map("custom_prices")
+}
+
+model InventoryItem {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  name            String // e.g., "Dinner Plates", "Forks", "Knives"
+  quantity        Int
+  missingQuantity Int?
+  description     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // relationships
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  hotelId String @db.ObjectId
+
+  @@map("inventory_items")
+}
+
+model Guard {
+  id       String      @id @default(auto()) @map("_id") @db.ObjectId
+  name     String
+  phone    String
+  whatsapp String?
+  photo    String?
+  status   GuardStatus @default(AVAILABLE)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // relationships
+  hotel   Hotel  @relation(fields: [hotelId], references: [id], onDelete: Cascade)
+  hotelId String @unique @db.ObjectId
+
+  @@map("guards")
+}
+
+model Hotel_Booking {
+  id                String        @id @default(auto()) @map("_id") @db.ObjectId
+  checkoutSessionId String?
+  bookedFromDate    String
+  bookedToDate      String
+  personOfGuests    Int
+  totalPrice        Float
+  bookingStatus     BookingStatus @default(PENDING)
+  // with airbnb or app
+  bookingSource     BookingSource @default(APP)
+  externalBookingId String?       @unique 
+  checkoutEmailSent Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  // relationships
+  partnerId String     @db.ObjectId
+  hotel     Hotel?     @relation(fields: [hotelId], references: [id])
+  hotelId   String?    @db.ObjectId
+  user      User?      @relation(fields: [userId], references: [id])
+  userId    String?    @db.ObjectId
+  payment   Payment[]
+  travelers Traveler[]
+
+  @@index([userId])
+  @@index([partnerId])
+  @@map("hotel_bookings")
+}
+
+model Traveler {
+  id               String        @id @default(auto()) @map("_id") @db.ObjectId
+  fullName         String
+  passportImageUrl String
+  bookingId        String        @db.ObjectId
+  booking          Hotel_Booking @relation(fields: [bookingId], references: [id])
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  @@map("travelers")
+}
+
+type OfferedService {
+  price           Float
+  serviceTypeName String
+}
+
+type LocalTip {
+  category      String?
+  subcategory   String?
+  subcategoryImage String?
+  floor_details String?
+  latitude      String?
+  longitude     String?
+  isActive      Boolean @default(true)
+}
+
+model Service {
+  id                 String             @id @default(auto()) @map("_id") @db.ObjectId
+  serviceName        String
+  serviceType        String
+  address            String
+  description        String
+  experience         Float
+  latitude           Float?
+  longitude          Float?
+  // price                    Float
+  offered_services   OfferedService[]
+  // estimatedDuration String
+  coverImage         String
+  serviceStatus      ServiceStatus
+  addRemark          String?
+  serviceRating      String?
+  serviceReviewCount Int                @default(0)
+  isBooked           EveryServiceStatus @default(AVAILABLE)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  // relationships
+  availability    Availability[]
+  scheduleSlots   ScheduleSlot[]
+  user            User?             @relation(fields: [providerId], references: [id])
+  providerId      String?           @db.ObjectId
+  serviceBookings Service_booking[]
+  reviews         Review[]
+
+  @@map("services")
+}
+
+model Availability {
+  id  String @id @default(auto()) @map("_id") @db.ObjectId
+  day String
+  // date String
+
+  // relationships
+  serviceId String?        @db.ObjectId
+  service   Service?       @relation(fields: [serviceId], references: [id])
+  slots     ScheduleSlot[]
+
+  @@map("available_services")
+}
+
+model ScheduleSlot {
+  id   String @id @default(auto()) @map("_id") @db.ObjectId
+  from String // "10:00 AM or PM"
+  to   String // "12:00 AM or PM"
+
+  // relationships
+  serviceId          String?       @db.ObjectId
+  service            Service?      @relation(fields: [serviceId], references: [id])
+  availableServiceId String?       @db.ObjectId
+  availability       Availability? @relation(fields: [availableServiceId], references: [id])
+
+  @@map("schedule_slots")
+}
+
+model Service_booking {
+  id                  String           @id @default(auto()) @map("_id") @db.ObjectId
+  checkoutSessionId   String?
+  property            String // property name
+  serviceName         String
+  offeredService      OfferedService[]
+  newOfferedService   OfferedService[]
+  date                String
+  day                 String
+  timeSlot            Json // { "from": "10:00 AM", "to": "12:00 PM" }
+  totalPrice          Float
+  specialInstructions String?
+  bookingStatus       BookingStatus    @default(PENDING)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+
+  // relationships
+  hotelId                String?                @db.ObjectId
+  providerId             String?                @db.ObjectId
+  userId                 String?                @db.ObjectId
+  user                   User?                  @relation(fields: [userId], references: [id])
+  serviceId              String?                @db.ObjectId
+  service                Service?               @relation(fields: [serviceId], references: [id])
+  payments               Payment[]
+  startAndEndProofVideos StartAndEndProofVideo?
+
+  @@index([userId])
+  @@index([providerId])
+  @@map("service_bookings")
+}
+
+model StartAndEndProofVideo {
+  id                       String   @id @default(auto()) @map("_id") @db.ObjectId
+  recordProofVideoStarting String[]
+  isStartedVideo           Boolean  @default(false)
+  recordProofVideoEnding   String[]
+  isEndedVideo             Boolean  @default(false)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  // relationships
+  bookingId String?          @unique @db.ObjectId
+  booking   Service_booking? @relation(fields: [bookingId], references: [id])
+  serviceId String?          @db.ObjectId
+
+  @@map("start_and_end_proof_videos")
+}
+
+model Review {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  rating         Float
+  subRatings     Json?
+  comment        String?
+  syncedToAirbnb Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // relationships
+  user           User?    @relation("ReviewsGiven", fields: [userId], references: [id])
+  userId         String   @db.ObjectId
+  reviewedUser   User?    @relation("ReviewsReceived", fields: [reviewedUserId], references: [id])
+  reviewedUserId String?  @db.ObjectId
+  hotel          Hotel?   @relation(fields: [hotelId], references: [id])
+  hotelId        String?  @db.ObjectId
+  service        Service? @relation(fields: [serviceId], references: [id])
+  serviceId      String?  @db.ObjectId
+  bookingId      String?  @db.ObjectId
+
+  @@map("reviews")
+}
+
+model Favorite {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  user        User     @relation("MyFavorites", fields: [userId], references: [id])
+  userId      String   @db.ObjectId
+  savedUser   User?    @relation("FavoritesMe", fields: [savedUserId], references: [id])
+  savedUserId String?  @db.ObjectId
+  hotel       Hotel?   @relation(fields: [hotelId], references: [id])
+  hotelId     String?  @db.ObjectId
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([userId, savedUserId])
+  @@unique([userId, hotelId])
+  @@map("favorites")
+}
+
+model Notifications {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  receiverId   String?  @db.ObjectId
+  partnerId    String?  @db.ObjectId
+  supportId    String?  @db.ObjectId
+  title        String
+  message      String?
+  body         String
+  serviceTypes String?
+  bookingId    String?
+  serviceId    String?
+  type         String?
+  isRead       Boolean  @default(false)
+  isClicked    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  user         User?    @relation(fields: [receiverId], references: [id])
+
+  @@index([receiverId])
+  @@map("notifications")
+}
+
+model Faq {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  question  String
+  answer    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("faqs")
+}
+
+model CustomerContact {
+  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+  fullName    String
+  email       String
+  phone       String?
+  description String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customer_contacts")
+}
+
+model About_App {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("about_apps")
+}
+
+model Terms_Condition {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("terms_conditions")
+}
+
+model Privacy_Policy {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  description String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("privacy_policies")
+}
+
+enum ChannelType {
+  DIRECT
+  GROUP
+}
+
+model Channel {
+  id          String      @id @default(auto()) @map("_id") @db.ObjectId
+  channelName String      @unique
+  type        ChannelType @default(DIRECT)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  //Relations
+  person1Id String?   @db.ObjectId
+  person1   User?     @relation("ChannelPerson1", fields: [person1Id], references: [id])
+  person2Id String?   @db.ObjectId
+  person2   User?     @relation("ChannelPerson2", fields: [person2Id], references: [id])
+  messages  Message[]
+
+  @@map("channels")
+}
+
+model Message {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  message   String?
+  files     String[]
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  senderId    String   @db.ObjectId
+  sender      User     @relation("sentMessages", fields: [senderId], references: [id])
+  channelName String
+  Channel     Channel? @relation(fields: [channelName], references: [channelName])
+
+  @@map("messages")
+}
+
+model Support {
+  id            String        @id @default(auto()) @map("_id") @db.ObjectId
+  fullName      String?
+  email         String?
+  contactNumber String?
+  subject       String
+  description   String
+  supportType   SupportType   @default(High)
+  status        SupportStatus @default(Pending)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  reportedUserId String? @db.ObjectId
+  user           User?   @relation(fields: [userId], references: [id])
+  userId         String? @db.ObjectId
+
+  @@map("supports")
+}
+
+enum ValidityType {
+  months
+  years
+}
+
+type Price {
+  currency Currency @default(USD)
+  amount   Float
+}
+
+type Validity {
+  type  ValidityType
+  value Int
+}
+
+model SubscriptionPlan {
+  id                   String                 @id @default(auto()) @map("_id") @db.ObjectId
+  name                 String
+  price                Price
+  validity             Validity
+  features             String[]
+  user                 User?                  @relation(fields: [userId], references: [id])
+  userId               String?                @db.ObjectId
+  stripeProductId      String?
+  stripePriceId        String?
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  purchaseSubscription Purchase_subscription?
+
+  @@map("subscription_plans")
+}
+
+model Purchase_subscription {
+  id                String             @id @default(auto()) @map("_id") @db.ObjectId
+  startDate         DateTime           @default(now())
+  endDate           DateTime
+  cancelAtPeriodEnd Boolean            @default(false)
+  status            SubscriptionStatus @default(ACTIVE)
+
+  // which provider with we subscribe
+  paymentProvider      PaymentProvider
+  stripeSubscriptionId String          @unique
+  stripePriceId        String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // relationships
+  user     User?             @relation(fields: [userId], references: [id])
+  userId   String            @unique @db.ObjectId
+  planId   String            @unique @db.ObjectId
+  plan     SubscriptionPlan? @relation(fields: [planId], references: [id])
+  payments Payment[]
+
+  @@map("purchase_subscriptions")
+}
+
+model Payment {
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  amount          Float
+  description     String?
+  currency        String?
+  country         String?
+  sessionId       String?         @unique
+  paymentIntentId String?
+  status          PaymentStatus
+  provider        PaymentProvider
+  // transactionId   String?
+  provider_amount Float?
+  admin_amount    Float?
+  serviceType     String
+  planId          String?
+  isDeleted       Boolean         @default(false)
+  metadata        Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  hotelId                 String?                @db.ObjectId
+  partnerId               String?                @db.ObjectId
+  providerId              String?                @db.ObjectId
+  user                    User                   @relation(fields: [userId], references: [id])
+  userId                  String                 @db.ObjectId
+  hotel_booking           Hotel_Booking?         @relation(fields: [hotel_bookingId], references: [id])
+  hotel_bookingId         String?                @db.ObjectId
+  purchaseSubscription    Purchase_subscription? @relation(fields: [purchase_subscriptionId], references: [id])
+  purchase_subscriptionId String?                @db.ObjectId
+  service_booking         Service_booking?       @relation(fields: [service_bookingId], references: [id])
+  service_bookingId       String?                @db.ObjectId
+
+  @@index([userId])
+  @@index([partnerId])
+  @@index([providerId])
+  @@map("payments")
+}

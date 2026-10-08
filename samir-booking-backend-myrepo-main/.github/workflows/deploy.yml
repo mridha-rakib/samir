@@ -1,0 +1,59 @@
+name: Deploy Booking Backend (PM2)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    if: github.repository == 'parvesmosarof35/samir-booking-backend'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: SSH and Deploy via PM2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            # 1. Load NVM environment
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            
+            # 2. Enter the backend project directory
+            cd /home/ubuntu/samir-booking-backend || exit 1
+
+            # 3. Pull the latest code
+            echo "Pulling latest code..."
+            git reset --hard HEAD
+            git clean -fd
+            git pull origin main
+
+            # 4. Install dependencies
+            echo "Installing dependencies..."
+            pnpm install --frozen-lockfile
+            
+            # 5. Build application (Creates the dist/ folder)
+            echo "Building application..."
+            pnpm build
+
+            # 6. Manage PM2 process
+            echo "Managing PM2 process..."
+            # Delete existing process to ensure a clean restart
+            pm2 delete samir-backend || true
+            
+            # START THE COMPILED VERSION with 500MB RAM limit
+            pm2 start dist/server.js --name "samir-backend" --max-memory-restart 500M
+
+            # 7. Save PM2 process list
+            echo "Saving PM2 process list..."
+            pm2 save
+            
+            echo "Backend PM2 Deployment completed successfully!"

@@ -1,0 +1,73 @@
+import { ServiceStatus } from "@prisma/client";
+import { type } from "os";
+
+export type IServiceFilterRequest = {
+  searchTerm?: string | undefined;
+  serviceName?: string | undefined;
+  serviceType?: string | undefined;
+  serviceStatus?: string | undefined;
+};
+
+export interface OfferedService {
+  price: number;
+  serviceTypeName: string;
+}
+
+export interface ServiceSlot {
+  id?: string;
+  from: string;
+  to: string;
+}
+
+export interface ServiceAvailability {
+  id?: string;
+  day: string;
+  slots: ServiceSlot[];
+}
+
+export interface IServiceCreate {
+  serviceName: string;
+  serviceType: string;
+  address: string;
+  description: string;
+  experience: number;
+  offered_services: OfferedService[];
+  coverImage: string;
+  serviceStatus: string;
+  addRemark?: string;
+  latitude?: number;
+  longitude?: number;
+  availability: ServiceAvailability[];
+}
+
+export interface IServiceUpdate {
+  serviceName?: string;
+  serviceType?: string;
+  address?: string;
+  description?: string;
+  experience?: number;
+  offered_services?: OfferedService[];
+  coverImage?: string;
+  serviceStatus?: string;
+  addRemark?: string;
+  latitude?: number;
+  longitude?: number;
+  availability?: ServiceAvailability[];
+}
+export interface IServiceResponse {
+  id: string;
+  serviceName: string;
+  serviceType: string;
+  address: string;
+  description: string;
+  experience: number;
+  offered_services: OfferedService[];
+  coverImage: string;
+  serviceStatus: string;
+  addRemark?: string;
+  latitude?: number;
+  longitude?: number;
+  createdAt: Date;
+  updatedAt: Date;
+  availability: ServiceAvailability[];
+}

@@ -1,0 +1,57 @@
+import express from "express";
+import { ServiceController } from "./service.controller";
+import auth from "../../middlewares/auth";
+import { UserRole } from "@prisma/client";
+import { parseBodyData } from "../../middlewares/parseNestedJson";
+import validateRequest from "../../middlewares/validateRequest";
+import { ServiceValidation } from "./service.validation";
+import { uploadFile } from "../../../helpars/fileUploader";
+import { cacheMiddleware } from "../../middlewares/cacheMiddleware";
+
+const router = express.Router();
+
+// create service
+router.post(
+  "/",
+  auth(UserRole.SERVICE_PROVIDER),
+  uploadFile.coverImage,
+  parseBodyData,
+  validateRequest(ServiceValidation.createServiceSchema),
+  ServiceController.createService
+);
+
+// update service
+router.patch(
+  "/:serviceId",
+  auth(UserRole.SERVICE_PROVIDER, UserRole.PROPERTY_OWNER),
+  uploadFile.upload.fields([
+    { name: "coverImage", maxCount: 1 },
+    { name: "recordProofVideoStarting", maxCount: 40 },
+    { name: "recordProofVideoEnding", maxCount: 40 },
+  ]),
+  parseBodyData,
+  validateRequest(ServiceValidation.updateServiceSchema),
+  ServiceController.updateService
+);
+
+// get all services
+router.get("/", cacheMiddleware(120), ServiceController.getAllServices);
+
+// get all my services
+router.get(
+  "/my-services",
+  auth(UserRole.SERVICE_PROVIDER),
+  ServiceController.getMyServices
+);
+
+// get single service
+router.get("/:serviceId", cacheMiddleware(20), ServiceController.getServiceById);
+
+// delete service
+router.delete(
+  "/:serviceId",
+  auth(UserRole.SERVICE_PROVIDER),
+  ServiceController.deleteService
+);
+
+export const serviceRoutes = router;

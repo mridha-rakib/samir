@@ -1,0 +1,104 @@
+import express from "express";
+import auth from "../../middlewares/auth";
+import { UserRole } from "@prisma/client";
+import { HotelController } from "./hotel.controller";
+import { uploadFile } from "../../../helpars/fileUploader";
+import { parseBodyData } from "../../middlewares/parseNestedJson";
+import validateRequest from "../../middlewares/validateRequest";
+import { hotelValidation } from "./hotel.validation";
+import { cacheMiddleware } from "../../middlewares/cacheMiddleware";
+
+const router = express.Router();
+
+// get all hotels
+router.get("/", cacheMiddleware(120), HotelController.getAllHotels);
+
+// get all my hotels for partner
+router.get(
+  "/partner-hotels",
+  auth(UserRole.PROPERTY_OWNER),
+  HotelController.getAllHotelsForPartner,
+);
+
+// get select my property
+router.get(
+  "/select-my-properties",
+  auth(UserRole.PROPERTY_OWNER),
+  HotelController.getSelectMyProperties,
+);
+
+// get my favorites
+router.get(
+  "/my-favorites",
+  auth(UserRole.USER),
+  HotelController.getAllFavoriteHotels,
+);
+
+// get single hotel
+router.get("/:id", cacheMiddleware(20), HotelController.getSingleHotel);
+
+// add favorite hotel room
+router.post(
+  "/favorite/:hotelId",
+  auth(UserRole.USER),
+  HotelController.toggleFavorite,
+);
+
+// create hotel
+router.post(
+  "/",
+  auth(UserRole.PROPERTY_OWNER),
+  uploadFile.upload.fields([
+    { name: "uploadPhotosOrVideos", maxCount: 5 },
+    { name: "houseRules", maxCount: 5 },
+    { name: "subcategoryImage", maxCount: 10 },
+  ]),
+  parseBodyData,
+  validateRequest(hotelValidation.createHotelSchema),
+  HotelController.createHotel,
+);
+
+// update hotel category
+router.patch(
+  "/update-category/:hotelId",
+  auth(UserRole.PROPERTY_OWNER),
+  uploadFile.upload.fields([{ name: "subcategoryImage", maxCount: 10 }]),
+  parseBodyData,
+  validateRequest(hotelValidation.updateHotelCategorySchema),
+  HotelController.updateHotelCategory,
+);
+
+// create guard
+router.post(
+  "/guard/:hotelId",
+  auth(UserRole.PROPERTY_OWNER),
+  uploadFile.upload.fields([{ name: "guardPhoto", maxCount: 1 }]),
+  parseBodyData,
+  validateRequest(hotelValidation.createGuardSchema),
+  HotelController.createGuard,
+);
+
+// update hotel
+router.patch(
+  "/:hotelId",
+  auth(UserRole.PROPERTY_OWNER),
+  uploadFile.upload.fields([
+    { name: "uploadPhotosOrVideos", maxCount: 5 },
+    { name: "houseRules", maxCount: 5 },
+    { name: "subcategoryImage", maxCount: 10 },
+  ]),
+  parseBodyData,
+  HotelController.updateHotel,
+);
+
+// delete hotel
+router.delete(
+  "/:hotelId",
+  auth(UserRole.PROPERTY_OWNER),
+  HotelController.deleteHotel,
+);
+
+// get hotel iCal export
+router.get("/:hotelId/calendar.ics", HotelController.exportHotelIcal);
+
+export const hotelRoute = router;

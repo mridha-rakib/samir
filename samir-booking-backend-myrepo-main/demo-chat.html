@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simple WebSocket Chat Test</title>
+  <style>
+    body { font-family: sans-serif; margin: 2rem; max-width: 800px; }
+    .input-group { margin-bottom: 1rem; }
+    label { display: block; font-weight: bold; margin-bottom: 0.25rem; }
+    input[type="text"] { width: 100%; padding: 0.5rem; box-sizing: border-box; }
+    button { padding: 0.5rem 1rem; cursor: pointer; }
+    #chatBox { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 1rem; margin-bottom: 1rem; background: #f9f9f9; }
+    .msg { margin-bottom: 0.5rem; padding: 0.5rem; border-radius: 4px; }
+    .my-msg { background-color: #d1e7dd; text-align: right; }
+    .other-msg { background-color: #e2e3e5; }
+    .system-msg { color: #888; font-style: italic; font-size: 0.9em; text-align: center; }
+  </style>
+</head>
+<body>
+
+  <h1>Simple WebSocket Test</h1>
+
+  <div class="input-group">
+    <label>WebSocket URL</label>
+    <input type="text" id="wsUrl" value="ws://localhost:5000">
+    <button onclick="connectWS()" style="margin-top: 0.5rem;">1. Connect</button>
+    <span id="status" style="color: red; font-weight: bold; margin-left: 1rem;">Disconnected</span>
+  </div>
+
+  <hr>
+
+  <div class="input-group">
+    <label>My User ID</label>
+    <input type="text" id="myId" placeholder="Sender ID...">
+  </div>
+
+  <div class="input-group">
+    <label>Receiver User ID</label>
+    <input type="text" id="receiverId" placeholder="Receiver ID...">
+  </div>
+
+  <button onclick="subscribeChannel()">2. Generate Channel & Subscribe</button>
+  <p>Current Channel: <strong id="currentChannel">None</strong></p>
+
+  <hr>
+
+  <h3>Chat Messages</h3>
+  <div id="chatBox"></div>
+  <div id="typingIndicator" style="display: none; color: gray; font-style: italic; margin-bottom: 0.5rem;">Someone is typing...</div>
+
+  <div class="input-group" style="display: flex; gap: 0.5rem;">
+    <input type="text" id="messageInput" placeholder="Type a message..." style="flex: 1;" onkeypress="handleTypingEvent(event)">
+    <button onclick="sendMessage()">3. Send Message</button>
+  </div>
+
+  <script>
+    let ws = null;
+    let channelName = null;
+    let typingTimeout = null;
+
+    function logToBox(text, type = 'system-msg', messageId = null) {
+      const box = document.getElementById('chatBox');
+      const div = document.createElement('div');
+      div.className = `msg ${type}`;
+      if (messageId && type === 'my-msg') {
+        div.id = `msg-${messageId}`;
+        div.innerHTML = `${text} <span class="read-receipt" style="font-size: 0.8em; color: gray;">(Sent)</span>`;
+      } else {
+        div.innerText = text;
+      }
+      box.appendChild(div);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function markMessagesAsRead() {
+      const receipts = document.querySelectorAll('.my-msg .read-receipt');
+      receipts.forEach(r => {
+        r.innerText = '(Seen ✓✓)';
+        r.style.color = 'blue';
+      });
+    }
+
+    function sendSeenStatus() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      if (!channelName) return;
+      
+      const myId = document.getElementById('myId').value.trim();
+      ws.send(JSON.stringify({
+        type: "seen",
+        channelName: channelName,
+        senderId: myId
+      }));
+    }
+
+    function handleTypingEvent(event) {
+      if (event.key === 'Enter') {
+        sendMessage();
+        return;
+      }
+
+      if (!ws || ws.readyState !== WebSocket.OPEN || !channelName) return;
+
+      const myId = document.getElementById('myId').value.trim();
+      ws.send(JSON.stringify({
+        type: "typing",
+        channelName: channelName,
+        senderId: myId,
+        isTyping: true
+      }));
+
+      clearTimeout(typingTimeout);
+      typingTimeout = setTimeout(() => {
+        ws.send(JSON.stringify({
+          type: "typing",
+          channelName: channelName,
+          senderId: myId,
+          isTyping: false
+        }));
+      }, 2000);
+    }
+
+    function connectWS() {
+      const url = document.getElementById('wsUrl').value;
+      if (!url) return alert("Enter WS URL");
+
+      if (ws) ws.close();
+
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        document.getElementById('status').innerText = "Connected";
+        document.getElementById('status').style.color = "green";
+        logToBox("WebSocket Connected");
+      };
+
+      ws.onmessage = (event) => {
+        const parsed = JSON.parse(event.data);
+        console.log("Received:", parsed);
+
+
+// {type: 'message', channelName: '6990fa023e6fbc4ac7a5c1ae69b066ed7bdf41606a12f0bc', data: {…}}
+// channelName
+// : 
+// "6990fa023e6fbc4ac7a5c1ae69b066ed7bdf41606a12f0bc"
+// data
+// : 
+// channelName
+// : 
+// "6990fa023e6fbc4ac7a5c1ae69b066ed7bdf41606a12f0bc"
+// createdAt
+// : 
+// "2026-03-15T21:34:46.553Z"
+// files
+// : 
+// Array(0)
+// length
+// : 
+// 0
+// [[Prototype]]
+// : 
+// Array(0)
+// id
+// : 
+// "69b725f6e663022b54e2b31c"
+// message
+// : 
+// "asdfasdfasdf"
+// sender
+// : 
+// fullName
+// : 
+// "Admin"
+// id
+// : 
+// "6990fa023e6fbc4ac7a5c1ae"
+// profileImage
+// : 
+// "https://i.ibb.co/Ps9gZ8DD/Profile-image.png"
+// [[Prototype]]
+// : 
+// Object
+// senderId
+// : 
+// "6990fa023e6fbc4ac7a5c1ae"
+// updatedAt
+// : 
+// "2026-03-15T21:34:46.553Z"
+// [[Prototype]]
+// : 
+// Object
+// type
+// : 
+// "message"
+// [[Prototype]]
+// : 
+// Object
+
+        if (parsed.type === "subscribed") {
+          logToBox(`Subscribed to channel: ${parsed.channelName}`);
+          // Tell them we've seen whatever they sent us as soon as we connect
+          sendSeenStatus();
+        } else if (parsed.type === "message") {
+          const isMe = parsed.data.senderId === document.getElementById('myId').value.trim();
+          logToBox(
+            `${parsed.data.sender?.fullName || parsed.data.senderId}: ${parsed.data.message}`, 
+            isMe ? 'my-msg' : 'other-msg',
+            parsed.data.id
+          );
+
+          if (!isMe) {
+            // Auto-send seen status when receiving a message
+            sendSeenStatus();
+          }
+        } else if (parsed.type === "typing") {
+           const typingDiv = document.getElementById('typingIndicator');
+           if (parsed.isTyping) {
+             typingDiv.style.display = 'block';
+             typingDiv.innerText = `${parsed.senderId} is typing...`;
+           } else {
+             typingDiv.style.display = 'none';
+           }
+        } else if (parsed.type === "seen") {
+           // update UI to show seen
+           markMessagesAsRead();
+        } else if (parsed.type === "error") {
+          logToBox(`Error: ${parsed.message}`, 'system-msg');
+        }
+      };
+
+      ws.onclose = () => {
+        document.getElementById('status').innerText = "Disconnected";
+        document.getElementById('status').style.color = "red";
+        logToBox("WebSocket Disconnected");
+      };
+    }
+
+    function subscribeChannel() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return alert("Connect WebSocket first!");
+
+      const myId = document.getElementById('myId').value.trim();
+      const recId = document.getElementById('receiverId').value.trim();
+
+      if (!myId || !recId) return alert("Please enter both My ID and Receiver ID");
+
+      // Generate channel name alphabetically
+      channelName = [myId, recId].sort().join("");
+      document.getElementById('currentChannel').innerText = channelName;
+
+      ws.send(JSON.stringify({
+        type: "subscribe",
+        channelName: channelName
+      }));
+    }
+
+    function sendMessage() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return alert("Connect WebSocket first!");
+      if (!channelName) return alert("Subscribe to a channel first!");
+
+      const myId = document.getElementById('myId').value.trim();
+      const recId = document.getElementById('receiverId').value.trim();
+      const input = document.getElementById('messageInput');
+      const msg = input.value.trim();
+
+      if (!msg) return;
+
+      ws.send(JSON.stringify({
+        type: "message",
+        channelName: channelName,
+        message: msg,
+        senderId: myId,
+        receiverId: recId
+      }));
+
+      input.value = "";
+    }
+  </script>
+</body>
+</html>

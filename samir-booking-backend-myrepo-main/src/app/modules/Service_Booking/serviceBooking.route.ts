@@ -1,0 +1,81 @@
+import express from "express";
+import { ServiceBookingController } from "./serviceBooking.controller";
+import { ServiceBookingValidation } from "./serviceBooking.validation";
+import validateRequest from "../../middlewares/validateRequest";
+import auth from "../../middlewares/auth";
+import { UserRole } from "@prisma/client";
+
+const router = express.Router();
+
+// create service booking
+router.post(
+  "/:serviceId",
+  auth(UserRole.PROPERTY_OWNER),
+  validateRequest(ServiceBookingValidation.createServiceBookingSchema),
+  ServiceBookingController.createServiceBooking,
+);
+
+// provider accept booking
+router.post(
+  "/:bookingId/accept",
+  auth(UserRole.SERVICE_PROVIDER),
+  ServiceBookingController.acceptBooking,
+);
+
+// provider in_progress booking
+router.post(
+  "/:bookingId/in-progress",
+  auth(UserRole.SERVICE_PROVIDER),
+  ServiceBookingController.inProgressBooking,
+);
+
+// provider complete service
+router.post(
+  "/:bookingId/complete-by-provider",
+  auth(UserRole.SERVICE_PROVIDER),
+  ServiceBookingController.completeBooking,
+);
+
+// provider reject booking
+router.post(
+  "/:bookingId/reject",
+  auth(UserRole.SERVICE_PROVIDER),
+  ServiceBookingController.rejectBooking,
+);
+
+// cancel booking from property owner
+router.post(
+  "/:bookingId/cancel-by-owner",
+  auth(UserRole.PROPERTY_OWNER),
+  ServiceBookingController.cancelBookingByPropertyOwner,
+);
+
+// property owner confirm → CAPTURE payment
+router.post(
+  "/:bookingId/confirm-by-owner",
+  auth(UserRole.PROPERTY_OWNER),
+  ServiceBookingController.confirmBookingAndReleasePaymentWithCaptureSplit,
+);
+
+// get all my active and past bookings for a property owner
+router.get(
+  "/active-past-bookings",
+  auth(UserRole.PROPERTY_OWNER),
+  ServiceBookingController.getAllServiceActiveAndPastBookings,
+);
+
+// get single service booking (details) by bookingId
+router.get(
+  "/:bookingId",
+  auth(UserRole.PROPERTY_OWNER, UserRole.SERVICE_PROVIDER),
+  ServiceBookingController.getSingleServiceBooking,
+);
+
+// get all service bookings for provider by providerId
+router.get(
+  "/provider/bookings",
+  auth(UserRole.SERVICE_PROVIDER),
+  ServiceBookingController.getAllServiceBookingsOfProvider,
+);
+
+export const serviceBookingRoute = router;

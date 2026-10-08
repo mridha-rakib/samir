@@ -1,0 +1,87 @@
+import { Router } from "express";
+import { messageControllers } from "./message.controller";
+import auth from "../../middlewares/auth";
+import { parseBodyData } from "../../middlewares/parseNestedJson";
+import { uploadFile } from "../../../helpars/fileUploader";
+import { UserRole } from "@prisma/client";
+
+const router = Router();
+
+// send message
+router.post(
+  "/send-message/:receiverId",
+  auth(),
+  uploadFile.uploadMessageImages,
+  parseBodyData,
+  messageControllers.sendMessage
+);
+
+
+router.get("/channels", auth(), messageControllers.getUserChannels);
+
+// get all my channels by authorization token
+router.get(
+  "/my-channels-by-authorization-token",
+  auth(),
+  messageControllers.getMyChannelByMyId
+);
+
+
+
+// ------------------------ reported message to admin group ------------------------
+
+// send message to admin group for resolve reports issue
+router.post(
+   "/send-report-message/:reportId",
+  auth(),
+  uploadFile.uploadMessageImages,
+  parseBodyData,
+  messageControllers.adminSendReportMessage
+);
+
+// get all reported group channels for admin
+router.get(
+  "/reported-channels",
+  auth(UserRole.SUPER_ADMIN, UserRole.ADMIN),
+  messageControllers.getReportedChannels
+);
+
+// ------------------------ reported message to admin group ------------------------
+
+
+
+
+
+// get specific channel messages by channel id
+router.get("/channel-messages/:channelId", auth(), messageControllers.getChannelMessages);
+
+// get my channel through my id and receiver id
+router.get("/my-channel/:receiverId", auth(), messageControllers.getMyChannel);
+
+// get all message
+router.get(
+  "/get-message/:channelName",
+  auth(),
+  messageControllers.getMessagesFromDB
+);
+
+// get all channels only user and admin
+router.get(
+  "/user-admin-channels",
+  auth(UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.USER),
+  messageControllers.getUserAdminChannels
+);
+
+// get single channel
+router.get(
+  "/channel/:channelId",
+  auth(
+    UserRole.SUPER_ADMIN,
+    UserRole.ADMIN,
+    UserRole.USER,
+    UserRole.PROPERTY_OWNER
+  ),
+  messageControllers.getSingleChannel
+);
+
+export const messageRoutes = router;
