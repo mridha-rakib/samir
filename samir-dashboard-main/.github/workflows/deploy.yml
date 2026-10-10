@@ -1,0 +1,52 @@
+name: Deploy Dashboard (Remote Build)
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    if: github.repository == 'parvesmosarof35/samir-dashboard'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and Build on Server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USERNAME }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e 
+            
+            # 1. Load NVM
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            
+            # 2. FIX: Manually add pnpm bin to PATH
+            export PATH="$HOME/.local/share/pnpm:$PATH"
+            
+            # 3. Enter project folder
+            cd /home/ubuntu/samir-dashboard
+            
+            # 4. Pull and Build
+            # Back up local .env to prevent git pull from failing or overwriting it
+            if [ -f .env ]; then mv .env .env.bak; fi
+            
+            git pull origin main
+            
+            # Restore local production .env
+            if [ -f .env.bak ]; then mv .env.bak .env; fi
+            
+            # Remove the 'approve-builds' if it's causing issues, 
+            # or keep --global as we added before.
+            pnpm install --frozen-lockfile
+            pnpm build
+            
+            # 5. Move files
+            sudo rm -rf /var/www/html/dashboard/*
+            sudo cp -r dist/* /var/www/html/dashboard/
+            
+            # 6. Permissions and Reload
+            sudo chown -R www-data:www-data /var/www/html/dashboard
+            sudo systemctl reload nginx

@@ -1,0 +1,36 @@
+@import "tailwindcss";
+/* Prevent layout shift when vertical scrollbar appears/disappears */
+html {
+  /* Reserve space for the scrollbar so content width stays consistent */
+  scrollbar-gutter: stable;
+  padding-right: 0px !important;
+  overflow-y: scroll !important;
+}
+
+html, body {
+  height: 100%;
+}
+
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  /* Prevent layout shift inside ant-design modals (like user-view-modal) */
+  .ant-modal-body {
+    scrollbar-gutter: stable;
+    padding-right: 0px !important;
+  }
+
+
+body {
+  /* Allow page to scroll when needed while keeping a stable gutter */
+  overflow-y: auto;
+  min-height: 100dvh;
+  padding-right: 0px !important;
+}
+
+/* Apply stable scrollbar gutter to the actual scrolling container in MainLayout */
+main {
+  scrollbar-gutter: stable;
+}
+
